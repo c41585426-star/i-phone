@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iPhone Showroom - Midnight Space</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-top: #000000;
+      --bg-bottom: #0a192f;
+      --glass-bg: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --text-main: #ffffff;
+      --text-muted: #a0aec0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: linear-gradient(135deg, var(--bg-top) 0%, #050b14 50%, var(--bg-bottom) 100%);
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+      min-height: 100vh;
+      /* Prevent overscroll bounce on mobile */
+      overscroll-behavior-y: none;
+    }
+
+    /* Canvas Particle System */
+    #particleCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Navigation Glassmorphism */
+    .glass-nav {
+      position: fixed;
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      padding: 15px 50px;
+      border-radius: 40px;
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .glass-nav h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #fff, #888);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Showroom Layout */
+    .showroom-container {
+      position: relative;
+      z-index: 5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      gap: 6vw;
+      padding: 100px 20px;
+      perspective: 1200px;
+    }
+
+    /* Phone Wrapper (For JS Physics) */
+    .iphone-wrapper {
+      opacity: 0;
+      will-change: transform;
+    }
+
+    /* Drift Up Animations */
+    @keyframes driftUp {
+      0% { transform: translateY(120vh) scale(0.8); opacity: 0; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    #phone1 { animation: driftUp 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards 0.2s; }
+    #phone2 { animation: driftUp 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards 0.4s; }
+    #phone3 { animation: driftUp 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards 0.6s; }
+
+    /* Bobbing Animations (Continuous) */
+    @keyframes bob1 {
+      0%, 100% { transform: translateY(0) rotate(-2deg); }
+      50% { transform: translateY(-25px) rotate(1deg); }
+    }
+    @keyframes bob2 {
+      0%, 100% { transform: translateY(0) rotate(1deg); }
+      50% { transform: translateY(-30px) rotate(-1deg); }
+    }
+    @keyframes bob3 {
+      0%, 100% { transform: translateY(0) rotate(-1deg); }
+      50% { transform: translateY(-20px) rotate(2deg); }
+    }
+
+    #phone1 .iphone-bob { animation: bob1 6s infinite ease-in-out; }
+    #phone2 .iphone-bob { animation: bob2 7s infinite ease-in-out 0.5s; }
+    #phone3 .iphone-bob { animation: bob3 5.5s infinite ease-in-out 1s; }
+
+    /* iPhone Structure */
+    .iphone-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 30px;
+      transform-style: preserve-3d;
+      transition: transform 0.3s ease;
+    }
+
+    .iphone-placeholder {
+      width: 260px;
+      height: 530px;
+      border-radius: 45px;
+      background: #0f1115;
+      border: 3px solid #333;
+      box-shadow: 
+        inset 0 0 20px rgba(255,255,255,0.1), 
+        0 40px 80px rgba(0,0,0,0.8),
+        0 0 40px rgba(74, 144, 226, 0.15); /* Ambient glow */
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: all 0.4s ease;
+    }
+
+    .iphone-placeholder::before {
+      content: '';
+      position: absolute;
+      top: -2px; left: -2px; right: -2px; bottom: -2px;
+      border-radius: 47px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 40%, rgba(255,255,255,0) 60%, rgba(255,255,255,0.1) 100%);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    /* Screen and variants */
+    .iphone-screen {
+      width: 93%;
+      height: 96%;
+      border-radius: 38px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      border: 2px solid #000;
+    }
+
+    /* Pro Screen */
+    .pro .iphone-screen {
+      background: linear-gradient(145deg, #161b22, #0d1117);
+      box-shadow: inset 0 0 40px rgba(40, 80, 150, 0.2);
+    }
+    
+    /* Pro Max Screen */
+    .pro-max {
+      width: 280px;
+      height: 570px;
+    }
+    .pro-max .iphone-screen {
+      background: linear-gradient(145deg, #1a1a2e, #0f0f1a);
+      box-shadow: inset 0 0 40px rgba(100, 40, 150, 0.2);
+    }
+
+    /* SE Screen */
+    .se {
+      width: 230px;
+      height: 480px;
+    }
+    .se .iphone-screen {
+      background: linear-gradient(145deg, #2a0808, #110505);
+      height: 75%;
+      top: -20px;
+      border-radius: 5px;
+    }
+
+    /* Dynamic Island / Notch */
+    .dynamic-island {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 30%;
+      height: 24px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 10;
+      box-shadow: inset 0 -1px 3px rgba(255,255,255,0.2);
+    }
+
+    .se .dynamic-island {
+      width: 100%;
+      height: 60px;
+      top: 0;
+      border-radius: 0;
+      background: #0f1115;
+      box-shadow: none;
+    }
+
+    .se-home-btn {
+      display: none;
+      position: absolute;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 45px;
+      height: 45px;
+      border-radius: 50%;
+      border: 3px solid #222;
+      background: #111;
+    }
+    .se .se-home-btn { display: block; }
+
+    /* Screen Content */
+    .screen-content {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+    }
+    .screen-content h3 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 5px;
+      background: linear-gradient(to bottom right, #fff, #bbb);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Glass Reflection Overlay */
+    .reflection {
+      position: absolute;
+      top: -100%;
+      left: -100%;
+      width: 300%;
+      height: 300%;
+      background: linear-gradient(
+        135deg, 
+        rgba(255,255,255,0) 0%, 
+        rgba(255,255,255,0) 40%, 
+        rgba(255,255,255,0.08) 50%, 
+        rgba(255,255,255,0) 60%, 
+        rgba(255,255,255,0) 100%
+      );
+      transform: rotate(30deg);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    /* Info Cards */
+    .glass-info {
+      background: var(--glass-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 25px;
+      border-radius: 24px;
+      border: 1px solid var(--glass-border);
+      text-align: center;
+      width: 100%;
+      max-width: 280px;
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .glass-info h2 {
+      font-size: 1.3rem;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .glass-info p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Hover Effects */
+    .iphone-card:hover .iphone-placeholder {
+      transform: translateY(-10px) scale(1.02);
+      box-shadow: 
+        inset 0 0 20px rgba(255,255,255,0.2), 
+        0 50px 100px rgba(0,0,0,0.9),
+        0 0 60px rgba(74, 144, 226, 0.3);
+    }
+    .iphone-card:hover .glass-info {
+      transform: translateY(5px);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .showroom-container {
+        flex-direction: column;
+        gap: 80px;
+        padding: 120px 20px 80px;
+        height: auto;
+      }
+    }
+    /* Info Section */
+    .about-section {
+      position: relative;
+      z-index: 10;
+      max-width: 900px;
+      margin: 0 auto 100px;
+      padding: 40px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 30px;
+      border: 1px solid var(--glass-border);
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+
+    .about-section h2 {
+      font-size: 2rem;
+      margin-bottom: 20px;
+      background: linear-gradient(90deg, #fff, #888);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .about-section p {
+      font-size: 1.1rem;
+      line-height: 1.8;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .about-features {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin-top: 40px;
+      flex-wrap: wrap;
+    }
+
+    .feature-item {
+      flex: 1;
+      min-width: 200px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 20px;
+    }
+
+    .feature-item h3 {
+      font-size: 1.2rem;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .feature-item p {
+      font-size: 0.9rem;
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Particle Background -->
+  <canvas id="particleCanvas"></canvas>
+
+  <!-- Navigation -->
+  <nav class="glass-nav">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+    </svg>
+    <h1>Showroom</h1>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="showroom-container" id="showroom">
+    
+    <!-- iPhone Pro -->
+    <div class="iphone-wrapper" id="phone1">
+      <div class="iphone-bob">
+        <div class="iphone-card">
+          <div class="iphone-placeholder pro">
+            <div class="reflection"></div>
+            <div class="iphone-screen">
+              <div class="dynamic-island"></div>
+              <div class="screen-content">
+                <h3>iPhone Pro</h3>
+              </div>
+            </div>
+          </div>
+          <div class="glass-info">
+            <h2>iPhone Pro</h2>
+            <p>Titanium design. A17 Pro chip. The ultimate daily driver.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- iPhone Pro Max -->
+    <div class="iphone-wrapper" id="phone2">
+      <div class="iphone-bob">
+        <div class="iphone-card">
+          <div class="iphone-placeholder pro-max">
+            <div class="reflection"></div>
+            <div class="iphone-screen">
+              <div class="dynamic-island"></div>
+              <div class="screen-content">
+                <h3>iPhone Pro Max</h3>
+              </div>
+            </div>
+          </div>
+          <div class="glass-info">
+            <h2>iPhone Pro Max</h2>
+            <p>Maximum display. Maximum power. A cinematic experience.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- iPhone SE -->
+    <div class="iphone-wrapper" id="phone3">
+      <div class="iphone-bob">
+        <div class="iphone-card">
+          <div class="iphone-placeholder se">
+            <div class="reflection"></div>
+            <div class="iphone-screen">
+              <div class="dynamic-island"></div>
+              <div class="screen-content">
+                <h3>iPhone SE</h3>
+              </div>
+            </div>
+            <div class="se-home-btn"></div>
+          </div>
+          <div class="glass-info">
+            <h2>iPhone SE</h2>
+            <p>Serious power. Unbeatable value. Classic design.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <section class="about-section">
+    <h2>Experience the Future of Mobile</h2>
+    <p>
+      Welcome to the Midnight Space Showroom. The models above represent the pinnacle of modern smartphone technology, blending cutting-edge performance with breathtaking design. Our interactive anti-gravity display allows you to experience these devices in a completely new dimension.
+    </p>
+    <div class="about-features">
+      <div class="feature-item">
+        <h3>Titanium Strength</h3>
+        <p>Aerospace-grade titanium design makes the Pro models incredibly light and strong.</p>
+      </div>
+      <div class="feature-item">
+        <h3>A17 Pro Chip</h3>
+        <p>A massive leap in performance with hardware-accelerated ray tracing and efficiency.</p>
+      </div>
+      <div class="feature-item">
+        <h3>Dynamic Island</h3>
+        <p>Seamlessly bubble up music, calls, and live activities right at the top of your screen.</p>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    /** 
+     * PARTICLE SYSTEM 
+     */
+    const canvas = document.getElementById('particleCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let particles = [];
+    const numParticles = Math.min(window.innerWidth / 10, 150); // Scale based on screen size
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Mouse Tracking for Physics
+    let mouseX = window.innerWidth / 2;
+    let mouseY = window.innerHeight / 2;
+    let isMouseMoving = false;
+    let interactionTimeout;
+
+    function handlePointerMove(x, y) {
+      mouseX = x;
+      mouseY = y;
+      isMouseMoving = true;
+      clearTimeout(interactionTimeout);
+      interactionTimeout = setTimeout(() => { isMouseMoving = false; }, 150);
+    }
+
+    window.addEventListener('mousemove', (e) => handlePointerMove(e.clientX, e.clientY));
+    window.addEventListener('touchmove', (e) => handlePointerMove(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+
+    // Device Orientation Fallback (Tilt to move)
+    window.addEventListener('deviceorientation', (e) => {
+      if (e.gamma !== null && e.beta !== null) {
+        let x = window.innerWidth / 2 + e.gamma * 20;
+        let y = window.innerHeight / 2 + (e.beta - 45) * 20; // Assume 45deg is neutral holding angle
+        handlePointerMove(
+          Math.max(0, Math.min(window.innerWidth, x)),
+          Math.max(0, Math.min(window.innerHeight, y))
+        );
+        // Extend timeout for tilt so it stays repelled while tilted
+        clearTimeout(interactionTimeout);
+        interactionTimeout = setTimeout(() => { isMouseMoving = false; }, 800);
+      }
+    });
+
+    class Particle {
+      constructor() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.size = Math.random() * 1.5 + 0.5;
+        this.density = (Math.random() * 20) + 1;
+        this.vx = (Math.random() - 0.5) * 0.3;
+        this.vy = (Math.random() - 0.5) * 0.3 - 0.2; // Slight upward drift (anti-gravity)
+        this.opacity = Math.random() * 0.5 + 0.1;
+      }
+      
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        // Wrap around screen
+        if (this.y < 0) this.y = canvas.height;
+        if (this.x < 0) this.x = canvas.width;
+        if (this.x > canvas.width) this.x = 0;
+        if (this.y > canvas.height) this.y = 0;
+        
+        // Mouse Repulsion
+        if (isMouseMoving) {
+          let dx = mouseX - this.x;
+          let dy = mouseY - this.y;
+          let distance = Math.sqrt(dx * dx + dy * dy);
+          let maxDistance = 200;
+          
+          if (distance < maxDistance) {
+            let force = (maxDistance - distance) / maxDistance;
+            let forceDirectionX = dx / distance;
+            let forceDirectionY = dy / distance;
+            
+            this.x -= (forceDirectionX * force * this.density * 0.5);
+            this.y -= (forceDirectionY * force * this.density * 0.5);
+          }
+        }
+      }
+      
+      draw() {
+        ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    for(let i = 0; i < numParticles; i++) {
+      particles.push(new Particle());
+    }
+
+    function renderParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles.forEach(p => {
+        p.update();
+        p.draw();
+      });
+    }
+
+    /** 
+     * ANTI-GRAVITY PHONE PHYSICS 
+     */
+    const phones = document.querySelectorAll('.iphone-wrapper');
+    const phoneData = Array.from(phones).map(phone => ({
+      el: phone,
+      x: 0, y: 0, rotX: 0, rotY: 0, rotZ: 0,
+      targetX: 0, targetY: 0, targetRotX: 0, targetRotY: 0, targetRotZ: 0,
+      baseX: 0, baseY: 0
+    }));
+
+    function updateBasePositions() {
+      phoneData.forEach(p => {
+        const rect = p.el.getBoundingClientRect();
+        // Calculate center of the element, subtracting current translation
+        p.baseX = rect.left - p.x + rect.width / 2;
+        p.baseY = rect.top - p.y + rect.height / 2;
+      });
+    }
+
+    // Wait for driftUp animation to finish before snapping base positions
+    setTimeout(updateBasePositions, 2500);
+    window.addEventListener('resize', () => {
+      setTimeout(updateBasePositions, 100);
+    });
+
+    function renderPhysics() {
+      phoneData.forEach(p => {
+        if (p.baseX === 0) return; // Wait until bases are calculated
+
+        const dx = p.baseX + p.x - mouseX;
+        const dy = p.baseY + p.y - mouseY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < 400 && isMouseMoving) {
+          // Repulsion Logic
+          const force = Math.pow((400 - dist) / 400, 2); // easing curve
+          p.targetX = (dx / dist) * force * 120; // push away X
+          p.targetY = (dy / dist) * force * 120; // push away Y
+          
+          // 3D Rotation effect
+          p.targetRotY = (dx / dist) * force * 25; 
+          p.targetRotX = -(dy / dist) * force * 25;
+          p.targetRotZ = (dx / dist) * force * 10;
+        } else {
+          // Return to float zone
+          p.targetX = 0;
+          p.targetY = 0;
+          p.targetRotX = 0;
+          p.targetRotY = 0;
+          p.targetRotZ = 0;
+        }
+        
+        // Smooth Interpolation (Lerp)
+        const lerpSpeed = 0.08;
+        p.x += (p.targetX - p.x) * lerpSpeed;
+        p.y += (p.targetY - p.y) * lerpSpeed;
+        p.rotX += (p.targetRotX - p.rotX) * lerpSpeed;
+        p.rotY += (p.targetRotY - p.rotY) * lerpSpeed;
+        p.rotZ += (p.targetRotZ - p.rotZ) * lerpSpeed;
+        
+        // Apply Transform
+        p.el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0) rotateX(${p.rotX}deg) rotateY(${p.rotY}deg) rotateZ(${p.rotZ}deg)`;
+      });
+    }
+
+    // Main Animation Loop
+    function tick() {
+      renderParticles();
+      renderPhysics();
+      requestAnimationFrame(tick);
+    }
+    
+    // Start Loop
+    requestAnimationFrame(tick);
+
+  </script>
+</body>
+</html>
